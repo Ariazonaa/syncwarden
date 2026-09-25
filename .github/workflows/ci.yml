@@ -27,4 +27,6 @@ jobs:
         with:
           name: syncwarden-chrome
           path: .output/*-chrome.zip
+          # .output is a dot directory; upload-artifact skips those by default.
+          include-hidden-files: true
           if-no-files-found: error
