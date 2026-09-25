@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- 16/32 px variant: thicker strokes, no edge line (it would blur away). -->
+  <rect width="128" height="128" rx="24" fill="#000000"/>
+  <g fill="none" stroke="#5ac8fa" stroke-width="14" stroke-linecap="round">
+    <path d="M24.53 49.64 A42 42 0 0 1 96.17 37.00"/>
+    <path d="M103.47 78.36 A42 42 0 0 1 31.83 91.00"/>
+  </g>
+  <g fill="#5ac8fa">
+    <path d="M84.68 46.64 L107.66 27.36 L106.46 49.26 Z"/>
+    <path d="M43.32 81.36 L20.34 100.64 L21.54 78.74 Z"/>
+  </g>
+  <path d="M52 43 H76 V85 L64 75 L52 85 Z" fill="#ffffff"/>
+</svg>

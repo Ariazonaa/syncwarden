@@ -1,0 +1,344 @@
+@import "tailwindcss";
+@source not "../../../design";
+
+/*
+ * AMOLED theme: every surface is true black (#000) so OLED pixels stay off.
+ * Structure comes from 1px lines, not from grey fills or shadows. The accent
+ * blue is the one from the icon and is used sparingly: the sync button, the
+ * active tab, focus rings and the spinner.
+ */
+:root {
+  color-scheme: dark;
+  --black: #000000;
+  --line: #262626;
+  --line-strong: #3a3a3a;
+  --text: #f2f2f2;
+  --text-muted: #8c8c8c;
+  --text-faint: #5c5c5c;
+  --accent: #5ac8fa;
+  --accent-dim: rgba(90, 200, 250, 0.35);
+  --danger: #ff5d5d;
+  --danger-dim: rgba(255, 93, 93, 0.45);
+  --ok: #4ade9a;
+  --warn: #ffb057;
+  font-family: system-ui, -apple-system, "Segoe UI", "Inter", sans-serif;
+  font-feature-settings: "tnum" 1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 400px;
+  height: 600px;
+  margin: 0;
+}
+
+body {
+  background: var(--black);
+  color: var(--text);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button,
+input {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease,
+    opacity 160ms ease;
+}
+
+button:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Surfaces: black on black, separated by a hairline. */
+.glass-card,
+.glass-thick-card {
+  background: var(--black);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.glass-thick-card {
+  border-color: var(--danger-dim);
+}
+
+.glass-row {
+  background: var(--black);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.action-delete {
+  border-color: var(--danger-dim);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.log-error {
+  border-color: var(--danger-dim);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.log-blocked {
+  border-color: rgba(255, 176, 87, 0.4);
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+
+.log-skipped {
+  opacity: 0.6;
+}
+
+/* Tabs: text with an accent underline, no pill. */
+.glass-nav {
+  background: var(--black);
+  border-bottom: 1px solid var(--line);
+  padding: 0 !important;
+}
+
+.nav-button {
+  position: relative;
+  min-height: 36px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.nav-button:hover {
+  color: var(--text);
+}
+
+.nav-button-active {
+  color: var(--text);
+}
+
+.nav-button-active::after {
+  content: "";
+  position: absolute;
+  left: 22%;
+  right: 22%;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.mode-option {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--text);
+  background: var(--black);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.mode-option:hover:not(:disabled) {
+  border-color: var(--line-strong);
+}
+
+.mode-option-active,
+.mode-option-active:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--black);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+
+.status-dot::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.status-ok::before {
+  background: var(--ok);
+}
+
+.status-error::before {
+  background: var(--danger);
+}
+
+.status-blocked::before {
+  background: var(--warn);
+}
+
+.status-running::before {
+  background: var(--accent);
+}
+
+/* Small section labels: sentence case, no tracking. */
+.eyebrow {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  margin-left: 1px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.glass-input {
+  width: 100%;
+  height: 40px;
+  padding: 0 12px;
+  color: var(--text);
+  font-size: 13px;
+  background: var(--black);
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+}
+
+.glass-input:hover:not(:disabled) {
+  border-color: #4d4d4d;
+}
+
+.glass-input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.glass-input::placeholder {
+  color: var(--text-faint);
+}
+
+.primary-button,
+.secondary-button,
+.danger-button {
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 14px;
+  font-weight: 650;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+/* The one filled surface in the popup. */
+.primary-button {
+  color: var(--black);
+  background: var(--accent);
+  border: 0;
+}
+
+.primary-button:hover:not(:disabled) {
+  background: #7fd6fb;
+}
+
+.secondary-button {
+  color: var(--text);
+  background: var(--black);
+  border: 1px solid var(--line-strong);
+}
+
+.secondary-button:hover:not(:disabled) {
+  border-color: #5a5a5a;
+}
+
+.danger-button {
+  color: var(--danger);
+  background: var(--black);
+  border: 1px solid var(--danger);
+}
+
+.danger-button:hover:not(:disabled) {
+  color: var(--black);
+  background: var(--danger);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.danger-button:active:not(:disabled) {
+  opacity: 0.85;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.danger-button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+
+.feedback {
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 18px;
+  background: var(--black);
+  border-top: 1px solid var(--line);
+}
+
+.feedback-success {
+  color: var(--ok);
+}
+
+.feedback-error {
+  color: var(--danger);
+}
+
+.text-error {
+  color: var(--danger);
+}
+
+* {
+  scrollbar-color: #333 transparent;
+  scrollbar-width: thin;
+}
+
+.sync-spinner {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 2px solid var(--accent-dim);
+  border-top-color: var(--accent);
+  animation: sync-spin 0.8s linear infinite;
+}
+
+@keyframes sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
