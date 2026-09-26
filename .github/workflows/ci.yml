@@ -2,6 +2,9 @@ name: ci
 
 on:
   push:
+    branches: ["**"]
+    # A pushed version tag (v0.1.1) builds and publishes the GitHub release.
+    tags: ["v*"]
   pull_request:
 
 permissions:
@@ -22,7 +25,7 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run zip
-      # Unsigned; the signed .xpi is attached to the release by hand.
+      # Unsigned; Firefox users install from addons.mozilla.org.
       - run: npm run zip:firefox
 
       - uses: actions/upload-artifact@v4
@@ -39,3 +42,41 @@ jobs:
           path: .output/*-firefox.zip
           include-hidden-files: true
           if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: syncwarden-chrome
+          path: dist
+
+      - name: Check tag against package.json
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          [ "$GITHUB_REF_NAME" = "v$version" ] || { echo "tag $GITHUB_REF_NAME != v$version"; exit 1; }
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          {
+            echo "**Chromium:** download \`syncwarden-$version-chrome.zip\` below and follow [Install → Chromium](https://github.com/$GITHUB_REPOSITORY#chromium)."
+            echo
+            echo "**Firefox:** install from [addons.mozilla.org](https://addons.mozilla.org/firefox/addon/syncwarden/); Firefox keeps it up to date."
+            echo
+            awk -v v="$version" '$0 ~ "^## " v " " {on=1; next} on && /^## / {exit} on' CHANGELOG.md
+          } > notes.md
+          cat notes.md
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/*-chrome.zip \
+            --title "Syncwarden ${GITHUB_REF_NAME#v}" --notes-file notes.md
