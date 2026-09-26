@@ -6,12 +6,18 @@ on:
     # A pushed version tag (v0.1.1) builds and publishes the GitHub release.
     tags: ["v*"]
   pull_request:
+  # Daily: attach the Mozilla-signed Firefox build to the latest release once
+  # addons.mozilla.org has approved that version.
+  schedule:
+    - cron: "17 5 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   check:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -80,3 +86,33 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" dist/*-chrome.zip \
             --title "Syncwarden ${GITHUB_REF_NAME#v}" --notes-file notes.md
+
+  firefox-asset:
+    # After a tag push the listing is usually still in review; the daily run
+    # picks the signed file up once it's approved.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Attach the signed .xpi if AMO has this release's version
+        run: |
+          tag=$(gh release view --json tagName --jq .tagName)
+          version="${tag#v}"
+          if gh release view "$tag" --json assets --jq '.assets[].name' | grep -q '.xpi$'; then
+            echo "$tag already has a Firefox build"; exit 0
+          fi
+          status=$(curl -sL -o latest.xpi -w '%{http_code}' https://addons.mozilla.org/firefox/downloads/latest/syncwarden/latest.xpi)
+          if [ "$status" != 200 ]; then
+            echo "AMO has no approved version yet (HTTP $status)"; exit 0
+          fi
+          amo_version=$(unzip -p latest.xpi manifest.json | jq -r .version)
+          if [ "$amo_version" != "$version" ]; then
+            echo "AMO serves $amo_version, release is $version -- waiting"; exit 0
+          fi
+          unzip -l latest.xpi | grep -q 'META-INF/mozilla.rsa' || { echo "xpi is not signed"; exit 1; }
+          mv latest.xpi "syncwarden-$version.xpi"
+          gh release upload "$tag" "syncwarden-$version.xpi"
