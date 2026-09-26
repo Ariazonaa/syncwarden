@@ -518,8 +518,14 @@ export function normalizeBaseUrl(input: string): string {
   return `${url.origin}${pathname}`.replace(/\/+$/, '');
 }
 
+/**
+ * Host permission pattern for the Linkwarden instance, without the port:
+ * Firefox doesn't apply a pattern with a port to fetch (the request then runs
+ * into CORS), while a port-less pattern covers every port in both browsers.
+ */
 export function permissionOrigin(baseUrl: string): string {
-  return `${new URL(normalizeBaseUrl(baseUrl)).origin}/*`;
+  const url = new URL(normalizeBaseUrl(baseUrl));
+  return `${url.protocol}//${url.hostname}/*`;
 }
 
 function unwrapResponse(payload: unknown): unknown {

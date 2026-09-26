@@ -6,10 +6,18 @@ import type {
   SyncState,
 } from '../core/types';
 import { createEmptySyncState, recoverSyncState } from '../core/types';
+import type { EncryptedToken } from './token-crypto';
+import { decryptToken, encryptToken, isEncryptedToken } from './token-crypto';
 
 export interface LinkwardenSettings {
   baseUrl: string;
   token: string;
+}
+
+// What actually sits in chrome.storage: the token only in encrypted form.
+interface StoredLinkwardenSettings {
+  baseUrl: string;
+  tokenEnc: EncryptedToken;
 }
 
 const SETTINGS_KEY = 'linkwardenSettings';
@@ -89,17 +97,31 @@ export async function loadLinkwardenSettings(): Promise<LinkwardenSettings | nul
   const result = await chrome.storage.local.get(SETTINGS_KEY);
   const value: unknown = result[SETTINGS_KEY];
 
-  if (!isLinkwardenSettings(value)) {
-    return null;
+  if (isStoredLinkwardenSettings(value)) {
+    const token = await decryptToken(value.tokenEnc);
+    if (token === null || token.length === 0) {
+      return null;
+    }
+    return { baseUrl: value.baseUrl, token };
   }
 
-  return value;
+  // Versions before token encryption stored the token as plaintext. Encrypt
+  // it on first read so the plaintext copy is gone from storage.
+  if (isLinkwardenSettings(value)) {
+    const settings = { baseUrl: value.baseUrl, token: value.token };
+    await saveLinkwardenSettings(settings);
+    return settings;
+  }
+
+  return null;
 }
 
 export async function saveLinkwardenSettings(
   settings: LinkwardenSettings,
 ): Promise<void> {
-  await chrome.storage.local.set({ [SETTINGS_KEY]: settings });
+  await chrome.storage.local.set({
+    [SETTINGS_KEY]: await toStoredLinkwardenSettings(settings),
+  });
 }
 
 export async function commitConnectionConfiguration(
@@ -114,7 +136,7 @@ export async function commitConnectionConfiguration(
     throw new Error('Invalid sync settings.');
   }
   await chrome.storage.local.set({
-    [SETTINGS_KEY]: settings,
+    [SETTINGS_KEY]: await toStoredLinkwardenSettings(settings),
     [SYNC_PREFERENCES_KEY]: preferences,
     ...(resetSyncData
       ? {
@@ -273,6 +295,30 @@ function isLinkwardenSettings(value: unknown): value is LinkwardenSettings {
     candidate.baseUrl.length > 0 &&
     typeof candidate.token === 'string' &&
     candidate.token.length > 0
+  );
+}
+
+async function toStoredLinkwardenSettings(
+  settings: LinkwardenSettings,
+): Promise<StoredLinkwardenSettings> {
+  return {
+    baseUrl: settings.baseUrl,
+    tokenEnc: await encryptToken(settings.token),
+  };
+}
+
+function isStoredLinkwardenSettings(
+  value: unknown,
+): value is StoredLinkwardenSettings {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    typeof candidate.baseUrl === 'string' &&
+    candidate.baseUrl.length > 0 &&
+    isEncryptedToken(candidate.tokenEnc)
   );
 }
 

@@ -52,6 +52,13 @@ describe('normalizeBaseUrl', () => {
       'https://example.test/*',
     );
   });
+
+  it('leaves the port out of the permission pattern', () => {
+    // Firefox doesn't apply a host permission with a port to fetch and falls
+    // back to CORS; a pattern without port covers every port in both browsers.
+    expect(permissionOrigin('http://nas.local:3000')).toBe('http://nas.local/*');
+    expect(permissionOrigin('https://[::1]:8443/lw')).toBe('https://[::1]/*');
+  });
 });
 
 describe('LinkwardenClient', () => {

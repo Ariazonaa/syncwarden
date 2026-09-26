@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   createSnapshot,
   listSnapshots,
+  restoreLocalTree,
+  type SyncSnapshot,
 } from '../src/adapters/snapshots';
 import { createEmptySyncState } from '../src/core/types';
 
@@ -132,5 +134,135 @@ describe('snapshots', () => {
     installChromeStorage([malformed]);
 
     await expect(listSnapshots()).resolves.toEqual([]);
+  });
+});
+
+function ffNode(
+  id: string,
+  title: string,
+  children?: chrome.bookmarks.BookmarkTreeNode[],
+  url?: string,
+): chrome.bookmarks.BookmarkTreeNode {
+  return {
+    id,
+    title,
+    syncing: false,
+    ...(children === undefined ? {} : { children }),
+    ...(url === undefined ? {} : { url }),
+  };
+}
+
+function ffSeparator(id: string): chrome.bookmarks.BookmarkTreeNode {
+  return { ...ffNode(id, '', undefined, 'data:'), type: 'separator' } as chrome.bookmarks.BookmarkTreeNode;
+}
+
+function firefoxRoot(
+  menu: chrome.bookmarks.BookmarkTreeNode[],
+  toolbar: chrome.bookmarks.BookmarkTreeNode[],
+): chrome.bookmarks.BookmarkTreeNode {
+  return ffNode('root________', '', [
+    ffNode('menu________', 'Lesezeichen-Menü', menu),
+    ffNode('toolbar_____', 'Lesezeichen-Symbolleiste', toolbar),
+    ffNode('unfiled_____', 'Weitere Lesezeichen', []),
+    ffNode('mobile______', 'Mobile Lesezeichen', []),
+  ]);
+}
+
+function restoreApi(live: chrome.bookmarks.BookmarkTreeNode) {
+  let nextId = 1;
+  return {
+    getTree: vi.fn(async () => [live]),
+    create: vi.fn(async (details: chrome.bookmarks.CreateDetails) =>
+      ffNode(`new-${nextId++}`, details.title ?? '', details.url === undefined ? [] : undefined, details.url),
+    ),
+    removeTree: vi.fn(async () => undefined),
+    remove: vi.fn(async () => undefined),
+  };
+}
+
+function snapshotOf(root: chrome.bookmarks.BookmarkTreeNode): SyncSnapshot {
+  return {
+    id: 's',
+    createdAt: 1,
+    reason: 'test',
+    localTree: [root],
+    remoteBefore: [],
+    state: createEmptySyncState(),
+  };
+}
+
+describe('snapshot restore across browsers', () => {
+  it('restores Firefox roots by key, not by position', async () => {
+    const saved = firefoxRoot(
+      [ffNode('a', 'A', undefined, 'https://a.example/')],
+      [ffNode('b', 'B', undefined, 'https://b.example/')],
+    );
+    const live = firefoxRoot([ffNode('x', 'X', undefined, 'https://x.example/')], []);
+    const api = restoreApi(live);
+
+    await restoreLocalTree(snapshotOf(saved), api);
+
+    expect(api.remove).toHaveBeenCalledWith('x');
+    expect(api.create).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: 'menu________', url: 'https://a.example/' }),
+    );
+    expect(api.create).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: 'toolbar_____', url: 'https://b.example/' }),
+    );
+  });
+
+  it('restores the fourth Firefox root and ignores localized title changes', async () => {
+    const saved = firefoxRoot([], []);
+    const mobile = saved.children?.[3];
+    if (mobile === undefined) throw new Error('fixture');
+    mobile.children = [ffNode('m', 'M', undefined, 'https://m.example/')];
+    const live = firefoxRoot([], []);
+    for (const child of live.children ?? []) child.title = `${child.title} (en)`;
+    const api = restoreApi(live);
+
+    await restoreLocalTree(snapshotOf(saved), api);
+
+    expect(api.create).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: 'mobile______', url: 'https://m.example/' }),
+    );
+  });
+
+  it('recreates separators as separators', async () => {
+    const saved = firefoxRoot([], [ffSeparator('sep')]);
+    const api = restoreApi(firefoxRoot([], []));
+
+    await restoreLocalTree(snapshotOf(saved), api);
+
+    expect(api.create).toHaveBeenCalledWith({ parentId: 'toolbar_____', type: 'separator' });
+  });
+
+  it('refuses a Firefox snapshot on a Chromium tree before changing anything', async () => {
+    const saved = firefoxRoot([ffNode('a', 'A', undefined, 'https://a.example/')], []);
+    const chromium = ffNode('0', '', [
+      ffNode('1', 'Bar', [ffNode('keep', 'Keep', undefined, 'https://keep.example/')]),
+      ffNode('2', 'Other', []),
+      ffNode('3', 'Mobile', []),
+    ]);
+    const api = restoreApi(chromium);
+
+    await expect(restoreLocalTree(snapshotOf(saved), api)).rejects.toThrow(
+      /root folders don’t match/,
+    );
+    expect(api.remove).not.toHaveBeenCalled();
+    expect(api.removeTree).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it('lists Firefox snapshots and Chromium snapshots without folderType', async () => {
+    const firefox = snapshotOf(firefoxRoot([], [ffSeparator('sep')]));
+    const chromium = {
+      ...snapshotOf(ffNode('0', '', [ffNode('1', 'Bar', []), ffNode('2', 'Other', [])])),
+      id: 'chromium',
+    };
+    installChromeStorage([firefox, chromium]);
+
+    const listed = await listSnapshots();
+
+    expect(listed.map((entry) => entry.id).sort()).toEqual(['chromium', 's']);
   });
 });

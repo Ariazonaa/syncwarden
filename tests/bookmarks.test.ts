@@ -38,6 +38,32 @@ function tree(): chrome.bookmarks.BookmarkTreeNode[] {
   ];
 }
 
+function firefoxTree(): chrome.bookmarks.BookmarkTreeNode[] {
+  const separator = {
+    ...node('ff-sep', '', undefined, 'data:'),
+    type: 'separator',
+  } as chrome.bookmarks.BookmarkTreeNode;
+  return [
+    node('root________', '', [
+      node('menu________', 'Lesezeichen-Menü', [
+        node('ff-menu-folder', 'News', [
+          node('ff-menu-1', 'News site', undefined, 'https://news.example/'),
+        ]),
+      ]),
+      node('toolbar_____', 'Lesezeichen-Symbolleiste', [
+        node('ff-dev', 'Dev', [
+          node('ff-bar-1', 'Docs', undefined, 'https://docs.example/'),
+          separator,
+        ]),
+      ]),
+      node('unfiled_____', 'Weitere Lesezeichen', [
+        node('ff-other-1', 'Other', undefined, 'https://other.example/'),
+      ]),
+      node('mobile______', 'Mobile Lesezeichen', []),
+    ]),
+  ];
+}
+
 function fakeApi(initialTree = tree()): BookmarkApi {
   let nextId = 100;
   const find = (id: string): chrome.bookmarks.BookmarkTreeNode | undefined => {
@@ -127,6 +153,78 @@ describe('ChromeBookmarksAdapter', () => {
     );
     expect(api.create).toHaveBeenLastCalledWith(
       expect.objectContaining({ title: 'Created', url: 'https://created.example' }),
+    );
+  });
+
+  it('maps Firefox roots by id: toolbar is the mirror, menu keeps its path', async () => {
+    const inventory = await new ChromeBookmarksAdapter(
+      fakeApi(firefoxTree()),
+    ).readInventory();
+    expect(inventory.items).toMatchObject([
+      { chromeId: 'ff-menu-1', folderPath: 'Bookmarks Menu/News' },
+      { chromeId: 'ff-bar-1', folderPath: 'Dev' },
+      { chromeId: 'ff-other-1', folderPath: 'Other Bookmarks' },
+    ]);
+  });
+
+  it('ignores Firefox separators instead of reporting them as skipped', async () => {
+    const inventory = await new ChromeBookmarksAdapter(
+      fakeApi(firefoxTree()),
+    ).readInventory();
+    expect(inventory.items.map((item) => item.chromeId)).not.toContain('ff-sep');
+    expect(inventory.skipped).toEqual([]);
+  });
+
+  it('creates bar folders below the Firefox toolbar, not the menu', async () => {
+    const api = fakeApi(firefoxTree());
+    await new ChromeBookmarksAdapter(api).createBookmark({
+      url: 'https://work.example',
+      title: 'Work',
+      folderPath: 'Bookmarks Bar/Work',
+    });
+    expect(api.create).toHaveBeenCalledWith(
+      expect.objectContaining({ parentId: 'toolbar_____', title: 'Work' }),
+    );
+  });
+
+  it('keeps a Firefox menu bookmark in the menu when only its title changes remotely', async () => {
+    const api = fakeApi(firefoxTree());
+    const adapter = new ChromeBookmarksAdapter(api);
+    const target = (await adapter.readInventory()).items.find(
+      (item) => item.chromeId === 'ff-menu-1',
+    );
+    if (target === undefined) throw new Error('fixture');
+
+    // sync-runner maps every remote path through remotePathToLocalPath, so a
+    // menu item's unchanged collection arrives as a bar path.
+    await adapter.updateBookmark('ff-menu-1', target.stableKey, {
+      url: 'https://news.example/',
+      title: 'Renamed in Linkwarden',
+      folderPath: 'Bookmarks Bar/Bookmarks Menu/News',
+    });
+
+    expect(api.update).toHaveBeenCalledWith('ff-menu-1', expect.objectContaining({ title: 'Renamed in Linkwarden' }));
+    expect(api.move).not.toHaveBeenCalled();
+    expect(api.create).not.toHaveBeenCalled();
+  });
+
+  it('still moves a bookmark whose collection really changed', async () => {
+    const api = fakeApi(firefoxTree());
+    const adapter = new ChromeBookmarksAdapter(api);
+    const target = (await adapter.readInventory()).items.find(
+      (item) => item.chromeId === 'ff-menu-1',
+    );
+    if (target === undefined) throw new Error('fixture');
+
+    await adapter.updateBookmark('ff-menu-1', target.stableKey, {
+      url: 'https://news.example/',
+      title: 'News site',
+      folderPath: 'Bookmarks Bar/Work',
+    });
+
+    expect(api.move).toHaveBeenCalledWith(
+      'ff-menu-1',
+      expect.objectContaining({ parentId: expect.any(String) }),
     );
   });
 

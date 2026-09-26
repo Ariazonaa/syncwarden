@@ -4,6 +4,7 @@ export const BOOKMARK_ROOT_PATHS = {
   bar: 'Bookmarks Bar',
   other: 'Other Bookmarks',
   mobile: 'Mobile Bookmarks',
+  menu: 'Bookmarks Menu',
 } as const;
 
 export type BookmarkRoot = keyof typeof BOOKMARK_ROOT_PATHS;
@@ -41,8 +42,8 @@ export function remotePathToLocalPath(remotePath: FolderPath): FolderPath {
  * Local browser path -> remote collection path. Only paths below the mirror
  * root (bookmarks bar) map into collection space; the root itself becomes the
  * empty path (Unorganized / no collection). Other roots (Other/Mobile
- * Bookmarks) return null, so their local path is used as the collection name
- * as is.
+ * Bookmarks, Firefox's Bookmarks Menu) return null, so their local path is
+ * used as the collection name as is.
  */
 export function localMirrorPathToRemotePath(
   localPath: FolderPath,

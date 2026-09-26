@@ -22,11 +22,20 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run zip
+      # Unsigned; the signed .xpi is attached to the release by hand.
+      - run: npm run zip:firefox
 
       - uses: actions/upload-artifact@v4
         with:
           name: syncwarden-chrome
           path: .output/*-chrome.zip
           # .output is a dot directory; upload-artifact skips those by default.
+          include-hidden-files: true
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: syncwarden-firefox
+          path: .output/*-firefox.zip
           include-hidden-files: true
           if-no-files-found: error

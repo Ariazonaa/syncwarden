@@ -1,8 +1,8 @@
 # Syncwarden
 
-A Chromium extension that keeps your browser bookmarks in sync with a
-self-hosted [Linkwarden](https://linkwarden.app/) instance: URLs, titles and
-the folder structure, in the background.
+A browser extension for Chromium and Firefox that keeps your bookmarks in sync
+with a self-hosted [Linkwarden](https://linkwarden.app/) instance: URLs, titles
+and the folder structure, in the background.
 
 <p>
   <img src="docs/screenshots/status.png" width="260" alt="Status: last sync, counts of created, updated and deleted bookmarks, Sync now button">
@@ -41,7 +41,7 @@ careful about it:
 - **Your Linkwarden top level is your bookmarks bar.** Collections become
   folders, nested collections become nested folders.
 
-If you need Firefox, mobile, or a backend other than Linkwarden, Floccus is the
+If you need mobile or a backend other than Linkwarden, Floccus is the
 better choice. [lwsync](https://github.com/WombatFromHell/lwsync) is another
 small Linkwarden-only extension worth a look.
 
@@ -56,14 +56,15 @@ extension.
 - Dry run: plan everything, write nothing
 - Large deletions need your approval
 - Snapshots before every write batch, restorable from the popup
-- Picks up where it left off (safely) after the service worker restarts
+- Picks up where it left off (safely) after the background script restarts
 - Links that already exist in Linkwarden with the same content are adopted,
   not duplicated
 - Save the current tab to Linkwarden with one click
 
 ## Requirements
 
-- A Chromium-based browser (Chrome, Chromium, Brave, Edge, Vivaldi)
+- A Chromium-based browser (Chrome, Chromium, Brave, Edge, Vivaldi) or
+  Firefox 140 or newer (desktop)
 - A reachable Linkwarden instance with `/api/v1`
 - A Linkwarden access token
 
@@ -71,6 +72,8 @@ The extension talks to Linkwarden directly from the browser. There is no
 server component.
 
 ## Install
+
+### Chromium
 
 Syncwarden is not in the Chrome Web Store (yet), so you load it as an unpacked
 extension.
@@ -87,15 +90,36 @@ To update, replace the folder's contents with the new release and click the
 reload icon on the extension's card. Keep the same folder: Chrome ties the
 extension's ID, and with it your settings and sync state, to that path.
 
+### Firefox
+
+Syncwarden is submitted to addons.mozilla.org and waiting for Mozilla's
+review. Once it is approved, install it from
+[its add-on page](https://addons.mozilla.org/firefox/addon/syncwarden/) with
+"Add to Firefox"; Firefox then keeps it up to date. Until then the link shows
+"not found".
+
+When you install it, Firefox shows which data the add-on sends: bookmarks and,
+when you use "save current page", that page's address. Both go only to your
+own Linkwarden.
+
+When you click "Test connection" for the first time, Firefox asks for access to
+your Linkwarden host and may close the popup while doing so. Open it again and
+click "Test connection" once more; the permission is already granted then.
+
 ### From source
 
 Needs a current Node.js (developed and tested with Node 24).
 
 ```sh
 npm ci
-npm run build      # unpacked build in .output/chrome-mv3/
-npm run zip        # zip in .output/
+npm run build          # Chromium: unpacked build in .output/chrome-mv3/
+npm run zip            # Chromium: zip in .output/
+npm run build:firefox  # Firefox: unpacked build in .output/firefox-mv3/
+npm run zip:firefox    # Firefox: zip and sources zip in .output/
 ```
+
+An unsigned Firefox build only loads temporarily (`about:debugging` → This
+Firefox → Load Temporary Add-on) and is gone after a restart.
 
 ## Setup
 
@@ -136,7 +160,7 @@ Bookmark changes are collected and handled together about 30 seconds later.
 Changes in Linkwarden are noticed on the next interval or manual sync.
 
 Syncs never run in parallel. Another trigger during a sync is queued and runs
-afterwards. If the service worker restarts in the middle of a job, that job is
+afterwards. If the background script restarts in the middle of a job, that job is
 dropped and planned again from freshly read data.
 
 ## Folders and collections
@@ -149,9 +173,12 @@ Linkwarden collections are mirrored as nested folders in the bookmarks bar:
 | `Bookmarks Bar/Dev` | `Dev` |
 | `Bookmarks Bar/Dev/Rust` | `Dev/Rust` |
 
-"Other Bookmarks" and "Mobile Bookmarks" are synced too. Their root name stays
-part of the collection path, e.g. `Other Bookmarks/Private`. New entries coming
-from Linkwarden always land in the bookmarks bar.
+"Other Bookmarks" and "Mobile Bookmarks" are synced too, and in Firefox also
+the "Bookmarks Menu". Their root name stays part of the collection path, e.g.
+`Other Bookmarks/Private` or `Bookmarks Menu/News`. New entries coming from
+Linkwarden always land in the bookmarks bar (the bookmarks toolbar in Firefox).
+The root folders are recognized by the browser's internal markers, not by
+their (localized) names.
 
 Missing collections are created as needed. Links in collections shared with you
 by someone else are left alone.
@@ -213,8 +240,9 @@ Access to your Linkwarden host is an optional permission, requested only after
 you enter the base URL.
 
 The base URL, token, sync state and snapshots are stored in the extension's
-local storage in your browser profile. The token is not encrypted there, so use
-HTTPS for Linkwarden and a separate token you can revoke.
+local storage in your browser profile. The token is stored encrypted, with the
+key in the extension's IndexedDB in the same profile (see Limitations). Use
+HTTPS for Linkwarden anyway, and a separate token you can revoke.
 
 ## Development
 
@@ -223,8 +251,10 @@ npm run dev          # dev build with reload
 npm test             # tests
 npm run test:watch   # tests in watch mode
 npm run typecheck    # TypeScript
-npm run build        # production build
-npm run zip          # zip for distribution
+npm run build        # production build (Chromium)
+npm run zip          # zip for distribution (Chromium)
+npm run build:firefox
+npm run zip:firefox  # Firefox zip plus the sources zip Mozilla reviews
 ```
 
 Before committing, at least `npm test`, `npm run typecheck` and
@@ -237,7 +267,7 @@ src/
 ├── adapters/              # browser bookmarks, Linkwarden, storage, snapshots
 ├── core/                  # URL keys, paths, sync planning
 └── entrypoints/
-    ├── background.ts      # MV3 service worker and scheduling
+    ├── background.ts      # background (service worker / event page), scheduling
     └── popup/             # React popup
 tests/                     # unit, integration and round-trip tests
 public/icon/               # extension icons (PNG)
@@ -252,10 +282,13 @@ succeeded.
 
 ## Limitations
 
-- Chromium browsers only. Firefox orders its bookmark roots differently and
-  isn't supported yet.
 - Not in the Chrome Web Store; you load it unpacked (see Install).
-- The access token is stored unencrypted in the browser profile.
+- Firefox for Android isn't supported.
+- The access token is encrypted with a device key that never leaves the
+  browser (a non-extractable WebCrypto key). That keeps it out of plaintext
+  storage dumps, but someone who copies the whole browser profile gets the key
+  along with it. If you were on an older version that stored the token in
+  plaintext, generate a fresh token in Linkwarden and paste it in.
 - Changes made in Linkwarden show up on the next interval or manual sync, not
   instantly.
 - PDF and image entries in Linkwarden are not turned into bookmarks.

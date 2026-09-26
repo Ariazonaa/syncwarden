@@ -11,6 +11,7 @@ import {
   type BookmarkRoot,
 } from '../core/paths';
 import type { FolderPath, LocalItem, StableKey } from '../core/types';
+import { identifyRoots, isSeparator } from './bookmark-roots';
 
 export interface SkippedBookmark {
   chromeId: string;
@@ -53,7 +54,7 @@ export class ChromeBookmarksAdapter {
 
     const items: LocalItem[] = [];
     const skipped: SkippedBookmark[] = [];
-    const rootEntries = editableRoots(root);
+    const rootEntries = identifyRoots(root);
     for (const entry of rootEntries) {
       await this.walk(entry.node, BOOKMARK_ROOT_PATHS[entry.root], items, skipped);
     }
@@ -95,6 +96,12 @@ export class ChromeBookmarksAdapter {
       title: input.title,
       url: input.url,
     });
+    // Same collection as before: leave the bookmark where it is. Otherwise a
+    // title change in Linkwarden would move Other/Menu/Mobile bookmarks into
+    // the bar, because remote paths always map to the bar.
+    if (canonicalFolderPath(input.folderPath) === target.folderPath) {
+      return updated;
+    }
     const parentId = await this.resolveOrCreateFolder(input.folderPath);
     if (updated.parentId !== parentId) {
       return this.api.move(updated.id, { parentId });
@@ -151,6 +158,9 @@ export class ChromeBookmarksAdapter {
     skipped: SkippedBookmark[],
   ): Promise<void> {
     for (const child of node.children ?? []) {
+      if (isSeparator(child)) {
+        continue;
+      }
       if (child.url === undefined) {
         const childPath = `${folderPath}/${escapePathSegment(child.title)}`;
         await this.walk(child, childPath, items, skipped);
@@ -194,7 +204,7 @@ export class ChromeBookmarksAdapter {
     if (root === undefined) {
       throw new Error('The browser bookmark tree is empty.');
     }
-    const rootNode = editableRoots(root).find((entry) => entry.root === rootKey)?.node;
+    const rootNode = identifyRoots(root).find((entry) => entry.root === rootKey)?.node;
     if (rootNode === undefined) {
       throw new Error(`Bookmark root missing: ${BOOKMARK_ROOT_PATHS[rootKey]}`);
     }
@@ -216,19 +226,6 @@ export class ChromeBookmarksAdapter {
   }
 }
 
-interface RootEntry {
-  root: BookmarkRoot;
-  node: chrome.bookmarks.BookmarkTreeNode;
-}
-
-function editableRoots(root: chrome.bookmarks.BookmarkTreeNode): RootEntry[] {
-  const children = root.children ?? [];
-  const roots: BookmarkRoot[] = ['bar', 'other', 'mobile'];
-  return roots.flatMap((rootName, index) => {
-    const node = children[index];
-    return node === undefined ? [] : [{ root: rootName, node }];
-  });
-}
 
 function rootKeyFromPath(value: string | undefined): BookmarkRoot | null {
   for (const [key, path] of Object.entries(BOOKMARK_ROOT_PATHS)) {

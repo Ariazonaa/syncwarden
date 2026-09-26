@@ -1,6 +1,6 @@
 {
   "name": "syncwarden",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sync browser bookmarks with a self-hosted Linkwarden instance, carefully.",
   "license": "MIT",
   "repository": {
@@ -12,7 +12,9 @@
   "scripts": {
     "dev": "wxt",
     "build": "wxt build",
+    "build:firefox": "wxt build -b firefox --mv3",
     "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox --mv3",
     "postinstall": "wxt prepare",
     "typecheck": "tsc --noEmit",
     "check": "npm run typecheck",
@@ -29,6 +31,7 @@
     "@types/react": "18.3.31",
     "@types/react-dom": "18.3.7",
     "@wxt-dev/module-react": "1.2.2",
+    "fake-indexeddb": "6.2.5",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
     "vitest": "4.1.11",

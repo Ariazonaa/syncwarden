@@ -1,13 +1,13 @@
 import type { LinkwardenLink } from './linkwarden';
 import type { SyncState } from '../core/types';
 import { recoverSyncState } from '../core/types';
+import { identifyRoots, isSeparator, type RootEntry } from './bookmark-roots';
 
 const SNAPSHOTS_KEY = 'syncSnapshots';
 // chrome.storage.local is limited to 5 MB. Snapshots hold the full bookmark
 // tree plus a slimmed-down remote copy; a few are enough to diagnose and
 // restore. A low limit keeps quota use small.
 const SNAPSHOT_LIMIT = 3;
-const EDITABLE_ROOT_LIMIT = 3;
 
 /**
  * Minimal copy of a remote link for snapshots. `remoteBefore` is NOT read on
@@ -106,38 +106,21 @@ export async function restoreLocalTree(
     throw new Error('Snapshot or current tree is empty. Restore cancelled.');
   }
 
-  const currentRoots = (currentRoot.children ?? []).slice(
-    0,
-    EDITABLE_ROOT_LIMIT,
-  );
-  const snapshotRoots = (snapshotRoot.children ?? []).slice(
-    0,
-    EDITABLE_ROOT_LIMIT,
-  );
-
-  if (currentRoots.length !== snapshotRoots.length) {
+  // Roots are matched by key (bar, other, menu, mobile), never by position or
+  // localized title, so a snapshot can't write one root's content into another.
+  const liveRoots = identifyRoots(currentRoot);
+  const savedRoots = identifyRoots(snapshotRoot);
+  const keysOf = (entries: RootEntry[]) =>
+    entries.map((entry) => entry.root).sort().join(',');
+  if (liveRoots.length === 0 || keysOf(liveRoots) !== keysOf(savedRoots)) {
     throw new Error(
       'The browser root folders don’t match the snapshot. Restore cancelled before anything was changed.',
     );
   }
-  for (let index = 0; index < currentRoots.length; index += 1) {
-    const liveRoot = currentRoots[index];
-    const savedRoot = snapshotRoots[index];
-    if (
-      liveRoot === undefined ||
-      savedRoot === undefined ||
-      liveRoot.title !== savedRoot.title
-    ) {
-      throw new Error(
-        'The browser root folders don’t match the snapshot. Restore cancelled before anything was changed.',
-      );
-    }
-  }
 
-  for (let index = 0; index < currentRoots.length; index += 1) {
-    const liveRoot = currentRoots[index];
-    const savedRoot = snapshotRoots[index];
-    if (liveRoot === undefined || savedRoot === undefined) {
+  for (const { root, node: liveRoot } of liveRoots) {
+    const savedRoot = savedRoots.find((entry) => entry.root === root)?.node;
+    if (savedRoot === undefined) {
       continue;
     }
     for (const child of liveRoot.children ?? []) {
@@ -162,6 +145,14 @@ async function recreateNode(
   parentId: string,
   node: chrome.bookmarks.BookmarkTreeNode,
 ): Promise<void> {
+  if (isSeparator(node)) {
+    // Firefox only; CreateDetails in the Chrome typings has no "type".
+    await api.create({
+      parentId,
+      type: 'separator',
+    } as chrome.bookmarks.CreateDetails);
+    return;
+  }
   if (node.url !== undefined) {
     await api.create({ parentId, title: node.title, url: node.url });
     return;
@@ -199,14 +190,16 @@ function isValidSnapshotRoot(value: unknown): boolean {
   ) {
     return false;
   }
-  const editableRoots = value.children.slice(0, EDITABLE_ROOT_LIMIT);
+  if (!value.children.every(isRecord)) {
+    return false;
+  }
+  const editableRoots = identifyRoots(
+    value as unknown as chrome.bookmarks.BookmarkTreeNode,
+  );
   return (
     editableRoots.length > 0 &&
     editableRoots.every(
-      (root) =>
-        isRecord(root) &&
-        root.url === undefined &&
-        Array.isArray(root.children),
+      ({ node }) => node.url === undefined && Array.isArray(node.children),
     )
   );
 }

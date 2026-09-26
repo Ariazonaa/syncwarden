@@ -186,15 +186,18 @@ export function App() {
     setIsConnecting(true);
     setFeedback({ kind: 'idle', message: 'Checking connection …' });
     try {
-      await flushPreferenceSaves();
       const normalizedUrl = normalizeBaseUrl(baseUrl);
       const origin = permissionOrigin(normalizedUrl);
+      // Must be the first await: Firefox only accepts permissions.request
+      // straight from the click handler. An already granted origin resolves
+      // without a prompt, so a second click after granting goes through.
       const granted = await chrome.permissions.request({ origins: [origin] });
       if (!granted) {
         throw new Error(
           'Host access not granted. Allow access to your Linkwarden instance.',
         );
       }
+      await flushPreferenceSaves();
       const nextSettings = { baseUrl: normalizedUrl, token: token.trim() };
       if (nextSettings.token.length === 0) {
         throw new Error(
