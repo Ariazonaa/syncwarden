@@ -92,11 +92,9 @@ extension's ID, and with it your settings and sync state, to that path.
 
 ### Firefox
 
-Syncwarden is submitted to addons.mozilla.org and waiting for Mozilla's
-review. Once it is approved, install it from
-[its add-on page](https://addons.mozilla.org/firefox/addon/syncwarden/) with
-"Add to Firefox"; Firefox then keeps it up to date. Until then the link shows
-"not found".
+Install Syncwarden from
+[its add-on page](https://addons.mozilla.org/firefox/addon/syncwarden/) on
+addons.mozilla.org with "Add to Firefox"; Firefox then keeps it up to date.
 
 When you install it, Firefox shows which data the add-on sends: bookmarks and,
 when you use "save current page", that page's address. Both go only to your
